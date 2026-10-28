@@ -9,6 +9,6 @@ Resources:
 
 Files:
 - main.tf
-- README.md that says this is a local example and nothing was deployed
+- README.md that says this is a local example and nothing was deployed, with a short "How this was made" section that links to SETUP.md
 
 Use variables with safe defaults. No account IDs, no credentials, no real company or client names.

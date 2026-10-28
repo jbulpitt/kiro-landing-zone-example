@@ -1,61 +1,38 @@
-# Landing Zone Baseline — Local Example Only
+# Landing Zone Example
 
-> **Nothing in this repository has been deployed. No AWS resources were created.**
-> This is a local Terraform code example for reference and learning purposes only.
+This is a **local example only**. No cloud resources were deployed, no AWS account was
+used, and no credentials are required. The Terraform files exist to demonstrate a
+baseline landing zone pattern and can be read, validated, and discussed without
+touching any infrastructure.
 
-## What is this?
+## What's in here
 
-A minimal Terraform configuration that models a basic AWS landing zone baseline. It is
-intended as a starting point or teaching aid — not a production deployment.
+| File | Purpose |
+|------|---------|
+| `main.tf` | VPC, public subnet, private subnet, and an S3 log bucket |
+| `SETUP.md` | Step-by-step notes on how this project was created |
+| `SPEC.md` | The one-page spec that was given to Kiro |
 
-## Resources defined in main.tf
+## Resources defined (not deployed)
 
-| Resource | Description |
-|---|---|
-| `aws_vpc.main` | A VPC with DNS support enabled |
-| `aws_subnet.public` | A public subnet (instances receive a public IP) |
-| `aws_subnet.private` | A private subnet (no public IP assignment) |
-| `aws_internet_gateway.main` | Internet gateway attached to the VPC |
-| `aws_route_table.public` | Route table directing `0.0.0.0/0` through the internet gateway |
-| `aws_s3_bucket.logs` | S3 bucket for logs — public access fully blocked, versioning and SSE-S3 encryption enabled |
+- **VPC** — `10.0.0.0/16`, DNS support and hostnames enabled
+- **Public subnet** — `10.0.1.0/24`, routed through an internet gateway
+- **Private subnet** — `10.0.2.0/24`, no outbound route (add a NAT gateway to enable one)
+- **S3 log bucket** — all public access blocked, versioning enabled, AES-256 encryption at rest
 
-## Variables
-
-All variables have safe defaults. No credentials, account IDs, or real company names are
-used anywhere in this codebase.
-
-| Variable | Default | Description |
-|---|---|---|
-| `aws_region` | `us-east-1` | AWS region |
-| `vpc_cidr` | `10.0.0.0/16` | VPC CIDR block |
-| `public_subnet_cidr` | `10.0.1.0/24` | Public subnet CIDR |
-| `private_subnet_cidr` | `10.0.2.0/24` | Private subnet CIDR |
-| `availability_zone` | `us-east-1a` | AZ for both subnets |
-| `project` | `landing-zone` | Name prefix applied to all resources |
-
-## Requirements
-
-- Terraform >= 1.5.0
-- AWS provider ~> 5.0
-
-## Usage (if you choose to deploy)
-
-If you decide to deploy this to a real AWS account, you are responsible for reviewing the
-configuration, understanding the costs, and supplying valid credentials. This project does
-**not** configure a remote backend — add one before sharing state with a team.
+## Validate locally without deploying
 
 ```bash
-terraform init
-terraform plan
-terraform apply
+terraform fmt -check
+terraform init -backend=false
+terraform validate
 ```
 
-To destroy all resources afterwards:
+`init -backend=false` downloads the AWS provider without configuring a backend. No
+plan or apply was run.
 
-```bash
-terraform destroy
-```
+## How this was made
 
-## License
-
-This example is provided as-is with no warranty. Use at your own risk.
+The Terraform was written by [Kiro CLI](https://kiro.dev) from the single-page spec in
+`SPEC.md`. See [SETUP.md](SETUP.md) for the exact commands used and the tool versions
+involved.

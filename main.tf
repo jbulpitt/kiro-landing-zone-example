@@ -42,15 +42,25 @@ variable "private_subnet_cidr" {
 }
 
 variable "availability_zone" {
-  description = "Availability zone for the subnets."
+  description = "Availability zone for both subnets."
   type        = string
   default     = "us-east-1a"
 }
 
-variable "project" {
-  description = "Project name used as a prefix on resource names and tags."
+variable "log_bucket_prefix" {
+  description = "Prefix for the S3 log bucket name. A random suffix is appended."
   type        = string
-  default     = "landing-zone"
+  default     = "landing-zone-logs"
+}
+
+variable "tags" {
+  description = "Common tags applied to all resources."
+  type        = map(string)
+  default = {
+    Project     = "landing-zone-example"
+    Environment = "example"
+    ManagedBy   = "terraform"
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -62,40 +72,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
   enable_dns_hostnames = true
 
-  tags = {
-    Name    = "${var.project}-vpc"
-    Project = var.project
-  }
-}
-
-# ---------------------------------------------------------------------------
-# Subnets
-# ---------------------------------------------------------------------------
-
-resource "aws_subnet" "public" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet_cidr
-  availability_zone       = var.availability_zone
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name    = "${var.project}-public-subnet"
-    Project = var.project
-    Tier    = "public"
-  }
-}
-
-resource "aws_subnet" "private" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.private_subnet_cidr
-  availability_zone       = var.availability_zone
-  map_public_ip_on_launch = false
-
-  tags = {
-    Name    = "${var.project}-private-subnet"
-    Project = var.project
-    Tier    = "private"
-  }
+  tags = merge(var.tags, { Name = "main-vpc" })
 }
 
 # ---------------------------------------------------------------------------
@@ -105,15 +82,21 @@ resource "aws_subnet" "private" {
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
-  tags = {
-    Name    = "${var.project}-igw"
-    Project = var.project
-  }
+  tags = merge(var.tags, { Name = "main-igw" })
 }
 
 # ---------------------------------------------------------------------------
-# Route tables
+# Public subnet
 # ---------------------------------------------------------------------------
+
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.public_subnet_cidr
+  availability_zone       = var.availability_zone
+  map_public_ip_on_launch = false # explicit; set to true only when needed
+
+  tags = merge(var.tags, { Name = "public-subnet", Tier = "public" })
+}
 
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
@@ -123,10 +106,7 @@ resource "aws_route_table" "public" {
     gateway_id = aws_internet_gateway.main.id
   }
 
-  tags = {
-    Name    = "${var.project}-public-rt"
-    Project = var.project
-  }
+  tags = merge(var.tags, { Name = "public-rt" })
 }
 
 resource "aws_route_table_association" "public" {
@@ -134,23 +114,43 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# The private subnet uses the VPC's default (local-only) route table.
-# Add a NAT Gateway route here if outbound internet access is needed.
+# ---------------------------------------------------------------------------
+# Private subnet
+# ---------------------------------------------------------------------------
+
+resource "aws_subnet" "private" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.private_subnet_cidr
+  availability_zone       = var.availability_zone
+  map_public_ip_on_launch = false
+
+  tags = merge(var.tags, { Name = "private-subnet", Tier = "private" })
+}
+
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.main.id
+  # No default route — add a NAT gateway route here if outbound access is needed.
+
+  tags = merge(var.tags, { Name = "private-rt" })
+}
+
+resource "aws_route_table_association" "private" {
+  subnet_id      = aws_subnet.private.id
+  route_table_id = aws_route_table.private.id
+}
 
 # ---------------------------------------------------------------------------
-# S3 Logs Bucket
+# S3 log bucket
 # ---------------------------------------------------------------------------
 
 resource "aws_s3_bucket" "logs" {
-  bucket_prefix = "${var.project}-logs-"
+  bucket        = var.log_bucket_prefix
+  force_destroy = true # safe for an example; remove in production
 
-  tags = {
-    Name    = "${var.project}-logs"
-    Project = var.project
-  }
+  tags = merge(var.tags, { Name = "log-bucket", Purpose = "logs" })
 }
 
-# Block all public access to the logs bucket.
+# Block all public access
 resource "aws_s3_bucket_public_access_block" "logs" {
   bucket = aws_s3_bucket.logs.id
 
@@ -160,7 +160,7 @@ resource "aws_s3_bucket_public_access_block" "logs" {
   restrict_public_buckets = true
 }
 
-# Enable versioning so log objects are protected against accidental deletion.
+# Enable versioning so log objects are recoverable
 resource "aws_s3_bucket_versioning" "logs" {
   bucket = aws_s3_bucket.logs.id
 
@@ -169,7 +169,7 @@ resource "aws_s3_bucket_versioning" "logs" {
   }
 }
 
-# Encrypt logs at rest using the default AWS-managed key (SSE-S3).
+# Server-side encryption with AWS-managed keys
 resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
   bucket = aws_s3_bucket.logs.id
 
@@ -199,7 +199,7 @@ output "private_subnet_id" {
   value       = aws_subnet.private.id
 }
 
-output "logs_bucket_name" {
-  description = "Name of the S3 logs bucket."
+output "log_bucket_name" {
+  description = "Name of the S3 log bucket."
   value       = aws_s3_bucket.logs.id
 }
